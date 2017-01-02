@@ -12,7 +12,7 @@ var path = require('path');
 var events_1 = require('events');
 var CLIENT_ID = '298306396051-kh1n5rje0lddjs9p85ttoei43os9ipni.apps.googleusercontent.com';
 var CLIENT_SECRET = 'FPQ7V8rQngtkCxq-uyWFiVqu';
-var REDIRECT_URL = 'https://e6f3d1b8-0ee0-4-231-b9ee.azurewebsites.net/oauthCallback';
+var REDIRECT_URL = 'https://embeta.mybluemix.net/oauthCallback';
 var SCOPES = [
     'https://www.googleapis.com/auth/plus.me',
     'https://www.googleapis.com/auth/drive'
