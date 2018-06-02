@@ -1,137 +1,105 @@
-const google = require('googleapis');
-const debug = require('debug')('eMCloud::GDrive');
-import * as FILE from 'fs';
-import * as mime from 'mime';
-import * as path from 'path';
-import { EventEmitter } from 'events';
-
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URL = process.env.GOOGLE_REDIRECT_URL;
-const SCOPES = [
-    'https://www.googleapis.com/auth/plus.me',
-    'https://www.googleapis.com/auth/drive'
-];
-const SPEED_TICK_TIME = 500;
-
-const OAuth2 = google.auth.OAuth2;
-
-
-export class GDrive extends EventEmitter {
-    newOauthClient() {
-        return new OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
-    }
-    uploadFile(stream, totalSize, mime, fileName, oauth2Client, parentId?, callback?, id?) {
-        this.emit('progress', {
-            id: id,
-            type: 'file',
-            name: fileName,
-            uploaded: 0,
-            size: totalSize
-        });
-        debug('Uploading file %s with parentId: %s', fileName, parentId);
-        var drive = google.drive({ version: 'v3', auth: oauth2Client });
-        var fileMetadata = {
-            name: fileName,
-            mimeType: mime
-        }
-        if (parentId) {
-            fileMetadata['parents'] = [parentId];
-        }
-        var req = drive.files.create({
-            resource: fileMetadata,
-            media: {
-                mimeType: mime,
-                body: stream
-            }
-        }, (err, resp) => {
-            debug('Uploaded %s to Drive Successfully', fileName);
-            this.emit("fileDownloaded", {
-                id: id,
-                size: totalSize,
-                name: fileName
+            this.stackProcessing = true;
+146
+            var params = this.stack[0];
+147
+            this.uploadFile(params[0], params[1], params[2], params[3], params[4], (err, resp) => {
+148
+                if (err) {
+149
+                    debug("Error processing stack: " + err);
+150
+                } else {
+151
+                    this.stack.splice(0, 1);
+152
+                    this.uploadStack();
+153
+                }
+154
             });
-            if (callback) {
-                callback(err, resp);
-            }
-        });
-        var interval = setInterval(() => {
-            this.emit("progress", {
-                id: id,
-                type: 'file',
-                name: fileName,
-                uploaded: req.req.connection.bytesWritten,
-                size: totalSize
-            });
-            if (req.req.connection.bytesWritten >= totalSize) {
-                clearInterval(interval);
-            }
-        }, SPEED_TICK_TIME);
-        return req;
-    }
-    getConsentPageURL(oauth2Client) {
-        var url = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: SCOPES
-        });
-        return url;
-    }
-    makeDir(name, oauth2Client, callback, parentId?, id?) {
-        this.emit('progress', {
-            id: id,
-            type: 'mkdir',
-            name: name
-        });
-        debug('Creating Directory %s with parentId: %s', name, parentId);
-        var drive = google.drive({ version: 'v3', auth: oauth2Client });
-        var fileMetadata = {
-            name: name,
-            mimeType: 'application/vnd.google-apps.folder'
-        };
-        if (parentId) {
-            fileMetadata['parents'] = [parentId];
+155
+        } else {
+156
+            this.stackProcessing = false;
+157
         }
-        drive.files.create({
-            resource: fileMetadata,
-            fields: 'id'
-        }, function (err, file) {
-            if (err) {
-                // Handle error
-                console.log(err);
-            } else {
-                callback(file.id);
-            }
-        });
-
+158
     }
-
-    uploadDir(folderPath, oauth2Client, parentId?, id?) {
+159
+    /**
+160
+     *Upload directory
+161
+     * Emits:
+162
+     *      'addSize':size
+163
+     */
+164
+    public uploadDir(folderPath, parentId?) {
+165
         FILE.readdir(folderPath, (err, list) => {
+166
             if (!err) {
+167
                 list.forEach((item) => {
+168
                     FILE.lstat(path.join(folderPath, item), (e, stat) => {
+169
                         this.emit("addSize", {
-                            id: id,
+170
                             size: stat.size
+171
                         });
+172
                         if (!err) {
+173
                             if (stat.isDirectory()) {
-                                this.makeDir(item, oauth2Client, (newParentId) => {
-                                    this.uploadDir(path.join(folderPath, item), oauth2Client, newParentId, id);
-                                }, parentId, id);
+174
+                                this.makeDir(item, (newParentId) => {
+175
+                                    this.uploadDir(path.join(folderPath, item), newParentId);
+176
+                                }, parentId);
+177
                             } else {
+178
                                 var fullPath = path.join(folderPath, item);
+179
                                 var stream = FILE.createReadStream(fullPath);
-                                this.uploadFile(stream, stat.size, mime.lookup(fullPath), item, oauth2Client, parentId, false, id);
+180
+                                //this.uploadFile(stream, stat.size, mime.lookup(fullPath), item, oauth2Client, parentId);
+181
+                                this.stack.push([stream, stat.size, mime.lookup(fullPath), item, parentId]);
+182
+                                if (!this.stackProcessing) {
+183
+                                    //stack not running
+184
+                                    this.uploadStack();
+185
+                                }
+186
                             }
+187
                         } else {
+188
                             debug(err);
+189
                         }
+190
                     });
+191
                 });
+192
             } else {
+193
                 debug(err);
+194
             }
+195
         });
+196
     }
+197
 }
