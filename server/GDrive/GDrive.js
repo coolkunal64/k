@@ -46,7 +46,7 @@ var GDrive = (function (_super) {
             fileMetadata['parents'] = [parentId];
         }
         var req = drive.files.create({
-            resource: fileMetadata,
+            resource: fileMetadata,poi
             media: {
                 mimeType: mime,
                 body: stream
